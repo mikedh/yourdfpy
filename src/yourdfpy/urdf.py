@@ -30,6 +30,7 @@ def _array_eq(arr1, arr2):
 def _scalar_eq(scalar1, scalar2):
     return np.isclose(scalar1, scalar2, atol=EQUALITY_TOLERANCE)
 
+
 @dataclass(eq=False)
 class TransmissionJoint:
     name: str
@@ -1330,7 +1331,12 @@ class URDF:
         for j in self.robot.joints:
             matrix, _ = self._forward_kinematics_joint(j)
 
-            s.graph.update(frame_from=j.parent, frame_to=j.child, matrix=matrix)
+            s.graph.update(
+                frame_from=j.parent,
+                frame_to=j.child,
+                matrix=matrix,
+                metadata={"joint_name": j.name},
+            )
 
         for l in self.robot.links:
             if l.name not in s.graph.nodes and l.name != s.graph.base_frame:
@@ -1475,6 +1481,19 @@ class URDF:
         """
         xml_element = self.write_xml()
         xml_element.write(fname, xml_declaration=True, pretty_print=True)
+
+    def to_glb(self):
+        """Export URDF as a single GLB with kinematics in GLTF node extras."""
+        from .glb import robot_to_dict
+
+        if self._scene is None:
+            raise ValueError("Scene graph not built")
+        robots = self._scene.metadata.get("robots", [])
+        robots.append(robot_to_dict(self.robot))
+        self._scene.metadata["robots"] = robots
+        return trimesh.exchange.gltf.export_glb(
+            self._scene, include_normals=True
+        )
 
     def _parse_mimic(xml_element):
         if xml_element is None:
